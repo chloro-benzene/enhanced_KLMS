@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>強化版K-LMS</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section id="setup-warning" class="notice error-notice" hidden>
+        Supabaseの設定が完了していません。管理者はREADMEの初期設定を行ってください。
+      </section>
+
+      <section id="auth-view" class="auth-view" hidden>
+        <div class="auth-heading">
+          <p class="eyebrow">Canvas連携ダッシュボード</p>
+          <h1>強化版K-LMS</h1>
+          <p class="muted">自分のアカウントでログインし、自分のCanvas APIを登録して利用します。</p>
+        </div>
+        <div class="auth-grid">
+          <form id="login-form" class="panel form-panel">
+            <h2>ログイン</h2>
+            <label>メールアドレス<input id="login-email" type="email" autocomplete="email" required></label>
+            <label>パスワード<input id="login-password" type="password" autocomplete="current-password" minlength="10" required></label>
+            <button type="submit">ログイン</button>
+          </form>
+          <form id="signup-form" class="panel form-panel">
+            <h2>新規登録</h2>
+            <label>表示名<input id="signup-name" type="text" autocomplete="name" maxlength="100"></label>
+            <label>メールアドレス<input id="signup-email" type="email" autocomplete="email" required></label>
+            <label>パスワード<input id="signup-password" type="password" autocomplete="new-password" minlength="10" required></label>
+            <p class="field-note">10文字以上で設定してください。</p>
+            <button type="submit" class="secondary">アカウントを作成</button>
+          </form>
+        </div>
+        <p id="auth-message" class="form-message" role="status"></p>
+      </section>
+
+      <div id="app-view" hidden>
+        <section class="hero">
+          <div>
+            <p class="eyebrow">Canvas連携ダッシュボード</p>
+            <h1>強化版K-LMS</h1>
+            <p id="profile" class="muted">ログイン情報を確認しています。</p>
+            <p id="cache-summary" class="cache-summary">Canvas APIを設定してください。</p>
+          </div>
+          <div class="actions">
+            <button id="reload" type="button" class="secondary">画面を再読み込み</button>
+            <button id="refresh" type="button">Canvasから更新</button>
+            <button id="logout" type="button" class="secondary">ログアウト</button>
+          </div>
+        </section>
+
+        <section class="settings-grid">
+          <article class="panel">
+            <div class="panel-header"><div><h2>ユーザー情報</h2><span class="count">本人だけが閲覧・編集できます</span></div></div>
+            <form id="profile-form" class="form-panel compact-form">
+              <label>表示名<input id="profile-name" type="text" maxlength="100"></label>
+              <label>所属<input id="profile-affiliation" type="text" maxlength="150" placeholder="例: 経済学部"></label>
+              <label>学籍番号<input id="profile-student-number" type="text" maxlength="50"></label>
+              <button type="submit" class="secondary">ユーザー情報を保存</button>
+            </form>
+          </article>
+          <article class="panel">
+            <div class="panel-header"><div><h2>Canvas API設定</h2><span id="canvas-setting-status" class="count">未設定</span></div></div>
+            <form id="canvas-settings-form" class="form-panel compact-form">
+              <label>Canvas URL<input id="canvas-base-url" type="url" value="https://lms.keio.jp" required></label>
+              <label>APIトークン<input id="canvas-token" type="password" autocomplete="off" required></label>
+              <p class="field-note">入力したトークンは確認後に暗号化され、画面には再表示されません。</p>
+              <div class="actions">
+                <button type="submit">接続確認して保存</button>
+                <button id="delete-canvas-settings" type="button" class="text-button danger-text">設定を削除</button>
+              </div>
+            </form>
+          </article>
+        </section>
+
+        <section class="stats" aria-label="課題の集計">
+          <article class="stat-card danger"><span>期限切れ</span><strong id="stat-overdue">0</strong></article>
+          <article class="stat-card warning"><span>7日以内</span><strong id="stat-due-soon">0</strong></article>
+          <article class="stat-card"><span>未提出</span><strong id="stat-unsubmitted">0</strong></article>
+          <article class="stat-card done"><span>提出済み</span><strong id="stat-submitted">0</strong></article>
+        </section>
+
+        <section class="panel timetable-panel">
+          <div class="panel-header stacked-header"><div><h2>時間割</h2><span class="count">自分の時間割としてDBに保存されます</span></div></div>
+          <div class="timetable-body">
+            <section class="today-block"><h3>今日の授業</h3><div id="today-classes" class="today-classes"></div></section>
+            <form id="timetable-form" class="timetable-form">
+              <div class="form-row">
+                <label>曜日<select id="timetable-day" required>
+                  <option value="mon">月</option><option value="tue">火</option><option value="wed">水</option>
+                  <option value="thu">木</option><option value="fri">金</option><option value="sat">土</option>
+                </select></label>
+                <label>時限<select id="timetable-period" required>
+                  <option value="1">1限</option><option value="2">2限</option><option value="3">3限</option>
+                  <option value="4">4限</option><option value="5">5限</option><option value="6">6限</option>
+                </select></label>
+              </div>
+              <label>授業名<input id="timetable-title" type="text" list="course-options" required placeholder="Canvasの授業名も入力可"></label>
+              <div class="form-row">
+                <label>教室<input id="timetable-room" type="text" placeholder="例: 日吉 D101"></label>
+                <label>担当教員<input id="timetable-teacher" type="text"></label>
+              </div>
+              <label>メモ<textarea id="timetable-memo" rows="2" placeholder="持ち物、出席条件など"></textarea></label>
+              <button type="submit">時間割に追加</button>
+            </form>
+            <div id="weekly-timetable" class="weekly-timetable" aria-label="週間時間割"></div>
+          </div>
+        </section>
+
+        <section class="grid">
+          <article class="panel">
+            <div class="panel-header assignment-header">
+              <div><h2>課題管理</h2><span id="assignment-count" class="count">0件</span></div>
+              <div class="filters">
+                <select id="course-filter" aria-label="科目で絞り込み"><option value="all">全科目</option></select>
+                <select id="status-filter" aria-label="状態で絞り込み">
+                  <option value="unsubmitted">未提出のみ</option><option value="all">すべて</option>
+                  <option value="overdue">期限切れ</option><option value="due-soon">7日以内</option>
+                  <option value="submitted">提出済み</option>
+                </select>
+              </div>
+            </div>
+            <div id="assignments" class="list"><p class="empty">Canvas APIを設定してください。</p></div>
+          </article>
+          <article class="panel">
+            <div class="panel-header"><h2>履修中コース</h2><span id="course-count" class="count">0件</span></div>
+            <div id="courses" class="list compact"><p class="empty">Canvas APIを設定してください。</p></div>
+          </article>
+        </section>
+
+        <section class="feature-grid">
+          <article class="panel">
+            <div class="panel-header stacked-header"><div><h2>学内情報ハブ</h2><span class="count">共通リンクと自分用リンク</span></div></div>
+            <div class="hub-body">
+              <section><h3>学内リンク</h3><div id="campus-links" class="quick-links"></div></section>
+              <section><h3>交通情報</h3><div id="transport-links" class="quick-links"></div></section>
+              <form id="campus-link-form" class="inline-form">
+                <input id="campus-link-name" type="text" placeholder="リンク名" required>
+                <input id="campus-link-url" type="url" placeholder="https://..." required>
+                <button type="submit" class="secondary">自分用リンクを追加</button>
+              </form>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header stacked-header"><div><h2>教科書マッチング</h2><span class="count">ログイン利用者間で共有されます</span></div></div>
+            <form id="textbook-form" class="textbook-form">
+              <div class="form-row">
+                <label>種別<select id="textbook-type" required><option value="sell">売りたい</option><option value="buy">買いたい</option></select></label>
+                <label>キャンパス<select id="textbook-campus">
+                  <option value="">未指定</option><option value="三田">三田</option><option value="日吉">日吉</option>
+                  <option value="矢上">矢上</option><option value="信濃町">信濃町</option>
+                  <option value="湘南藤沢">湘南藤沢</option><option value="芝共立">芝共立</option>
+                </select></label>
+              </div>
+              <label>教科書名<input id="textbook-title" type="text" required></label>
+              <div class="form-row">
+                <label>授業名<input id="textbook-course" type="text" list="course-options"></label>
+                <label>担当教員<input id="textbook-teacher" type="text"></label>
+              </div>
+              <div class="form-row">
+                <label>希望価格<input id="textbook-price" type="text" placeholder="例: 1000円、応相談"></label>
+                <label>状態<input id="textbook-condition" type="text" placeholder="例: 書き込みなし"></label>
+              </div>
+              <label>連絡先<input id="textbook-contact" type="text" placeholder="ログイン利用者に公開されます"></label>
+              <label>メモ<textarea id="textbook-note" rows="3" placeholder="版、受け渡し場所など"></textarea></label>
+              <button type="submit">投稿する</button>
+            </form>
+            <div class="textbook-tools">
+              <input id="textbook-search" type="search" placeholder="教科書名・授業名で検索">
+              <select id="textbook-filter-type" aria-label="種別で絞り込み">
+                <option value="all">すべて</option><option value="sell">売りたい</option><option value="buy">買いたい</option>
+              </select>
+            </div>
+            <div id="textbook-posts" class="list"></div>
+          </article>
+        </section>
+        <datalist id="course-options"></datalist>
+      </div>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

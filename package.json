@@ -1,0 +1,11 @@
+﻿{
+  "name": "enhanced-k-lms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "canvas:probe": "node scripts/canvas-probe.mjs",
+    "dev": "node server.mjs"
+  }
+}
