@@ -64,10 +64,19 @@ function validateCredentials(body) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new HttpError(400, "メールアドレスの形式が正しくありません。");
   }
-  if (password.length < 10 || password.length > 128) {
-    throw new HttpError(400, "パスワードは10文字以上128文字以内にしてください。");
+  if (!password || password.length > 128) {
+    throw new HttpError(400, "パスワードを入力してください。");
   }
   return { email, password };
+}
+
+function validateNewPassword(password) {
+  if (password.length < 8 || password.length > 128) {
+    throw new HttpError(400, "パスワードは8文字以上128文字以内にしてください。");
+  }
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    throw new HttpError(400, "パスワードには英字と数字をそれぞれ1文字以上含めてください。");
+  }
 }
 
 async function ensureProfile(user) {
@@ -226,6 +235,7 @@ async function handleApi(request, response, url) {
     assertRateLimit(`signup:${clientAddress(request)}`, { limit: 5 });
     const body = await readJsonBody(request);
     const credentials = validateCredentials(body);
+    validateNewPassword(credentials.password);
     const result = await signUp({
       ...credentials,
       displayName: cleanText(body.displayName, { max: 100 })
