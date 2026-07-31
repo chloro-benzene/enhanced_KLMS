@@ -34,10 +34,21 @@
             <button type="submit" class="secondary">アカウントを作成</button>
           </form>
         </div>
+        <div class="preview-entry">
+          <div>
+            <strong>登録せずに画面を確認</strong>
+            <p class="muted">サンプルデータを使って、時間割や課題管理などの構成を閲覧できます。</p>
+          </div>
+          <button id="preview-button" type="button" class="secondary">プレビューを見る</button>
+        </div>
         <p id="auth-message" class="form-message" role="status"></p>
       </section>
 
       <div id="app-view" hidden>
+        <section id="preview-notice" class="notice preview-notice" hidden>
+          <strong>プレビューモード</strong>
+          表示中の氏名、授業、課題、投稿はすべてサンプルです。データの保存やCanvasとの通信は行いません。
+        </section>
         <section class="hero">
           <div>
             <p class="eyebrow">Canvas連携ダッシュボード</p>

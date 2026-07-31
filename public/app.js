@@ -6,6 +6,8 @@ const appView = $("#app-view");
 const authMessage = $("#auth-message");
 const loginForm = $("#login-form");
 const signupForm = $("#signup-form");
+const previewButton = $("#preview-button");
+const previewNotice = $("#preview-notice");
 const logoutButton = $("#logout");
 const profileForm = $("#profile-form");
 const canvasSettingsForm = $("#canvas-settings-form");
@@ -121,6 +123,7 @@ let timetableEntries = [];
 let customCampusLinks = [];
 let textbookPostList = [];
 let toastTimer = null;
+let isPreviewMode = false;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -199,9 +202,134 @@ function setFormBusy(form, busy) {
   for (const control of form.elements) control.disabled = busy;
 }
 
+function buildAssignmentStats(items) {
+  return items.reduce((stats, assignment) => {
+    if (assignment.hiddenByUser) return stats;
+    stats.total += 1;
+    if (assignment.submitted) stats.submitted += 1;
+    if (!assignment.submitted) stats.unsubmitted += 1;
+    if (assignment.status === "overdue") stats.overdue += 1;
+    if (assignment.status === "due-soon") stats.dueSoon += 1;
+    if (assignment.status === "no-due") stats.noDue += 1;
+    return stats;
+  }, { total: 0, submitted: 0, unsubmitted: 0, overdue: 0, dueSoon: 0, noDue: 0 });
+}
+
+function previewDate(days, hour = 17) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(hour, 0, 0, 0);
+  return date.toISOString();
+}
+
+function createPreviewData() {
+  const courses = [
+    { id: "preview-course-1", name: "データサイエンス基礎", courseCode: "DS101" },
+    { id: "preview-course-2", name: "現代社会論", courseCode: "SOC203" },
+    { id: "preview-course-3", name: "Academic Writing", courseCode: "ENG215" },
+    { id: "preview-course-4", name: "情報システム設計", courseCode: "IS301" }
+  ];
+  const assignments = [
+    {
+      id: "preview-assignment-1",
+      courseId: courses[0].id,
+      courseName: courses[0].name,
+      title: "第5回演習課題",
+      dueAt: previewDate(-1, 23),
+      submitted: false,
+      status: "overdue",
+      statusLabel: "期限切れ",
+      htmlUrl: "",
+      hiddenByUser: false
+    },
+    {
+      id: "preview-assignment-2",
+      courseId: courses[3].id,
+      courseName: courses[3].name,
+      title: "システム要件定義書",
+      dueAt: previewDate(2, 18),
+      submitted: false,
+      status: "due-soon",
+      statusLabel: "7日以内",
+      htmlUrl: "",
+      hiddenByUser: false
+    },
+    {
+      id: "preview-assignment-3",
+      courseId: courses[1].id,
+      courseName: courses[1].name,
+      title: "期末レポート構成案",
+      dueAt: previewDate(10, 17),
+      submitted: false,
+      status: "upcoming",
+      statusLabel: "今後",
+      htmlUrl: "",
+      hiddenByUser: false
+    },
+    {
+      id: "preview-assignment-4",
+      courseId: courses[2].id,
+      courseName: courses[2].name,
+      title: "Essay Draft 2",
+      dueAt: previewDate(-3, 12),
+      submitted: true,
+      status: "submitted",
+      statusLabel: "提出済み",
+      htmlUrl: "",
+      hiddenByUser: false
+    },
+    {
+      id: "preview-assignment-5",
+      courseId: courses[0].id,
+      courseName: courses[0].name,
+      title: "復習用小テスト",
+      dueAt: null,
+      submitted: false,
+      status: "no-due",
+      statusLabel: "期限なし",
+      htmlUrl: "",
+      hiddenByUser: false
+    }
+  ];
+
+  return {
+    courses,
+    assignments,
+    stats: buildAssignmentStats(assignments),
+    meta: {
+      cacheSource: "preview",
+      fetchedAt: new Date().toISOString(),
+      expiresAt: previewDate(1),
+      assignmentPreferencesAvailable: true,
+      hiddenAssignments: 0,
+      fetchErrors: []
+    }
+  };
+}
+
+function setPreviewControls(enabled) {
+  previewNotice.hidden = !enabled;
+  appView.classList.toggle("preview-mode", enabled);
+  reloadButton.hidden = enabled;
+  refreshButton.hidden = enabled;
+  logoutButton.textContent = enabled ? "プレビューを終了" : "ログアウト";
+  for (const form of [profileForm, canvasSettingsForm, timetableForm, campusLinkForm, textbookForm]) {
+    setFormBusy(form, enabled);
+  }
+  if (enabled) deleteCanvasSettingsButton.hidden = true;
+}
+
 function showAuth() {
+  isPreviewMode = false;
+  setPreviewControls(false);
   sessionState = null;
   dashboardData = null;
+  timetableEntries = [];
+  customCampusLinks = [];
+  textbookPostList = [];
+  courseFilter.value = "all";
+  statusFilter.value = "unsubmitted";
+  transportCampus.value = "mita";
   appView.hidden = true;
   authView.hidden = false;
 }
@@ -214,6 +342,14 @@ function fillAccountSettings() {
   profileLabel.textContent = `${userProfile.display_name || sessionState.user.email} のCanvas情報`;
 
   const setting = sessionState.canvasSettings;
+  if (isPreviewMode) {
+    profileLabel.textContent = "山田 太郎（プレビュー利用者）の学習情報";
+    canvasSettingStatus.textContent = "サンプル接続済み";
+    $("#canvas-base-url").value = "https://lms.keio.jp";
+    $("#canvas-token").value = "";
+    deleteCanvasSettingsButton.hidden = true;
+    return;
+  }
   canvasSettingStatus.textContent = setting
     ? `設定済み（${setting.token_hint}、確認: ${formatDateTime(setting.verified_at)}）`
     : "未設定";
@@ -223,6 +359,8 @@ function fillAccountSettings() {
 }
 
 async function showApplication(session) {
+  isPreviewMode = false;
+  setPreviewControls(false);
   sessionState = session;
   authView.hidden = true;
   appView.hidden = false;
@@ -234,6 +372,79 @@ async function showApplication(session) {
     loadCampusLinks(),
     loadTextbooks()
   ]);
+}
+
+function showPreview() {
+  isPreviewMode = true;
+  sessionState = {
+    user: { email: "preview@example.com" },
+    profile: {
+      display_name: "山田 太郎",
+      affiliation: "経済学部",
+      student_number: "12345678"
+    },
+    canvasSettings: {
+      base_url: "https://lms.keio.jp",
+      token_hint: "サンプル",
+      verified_at: new Date().toISOString()
+    }
+  };
+  dashboardData = createPreviewData();
+  timetableEntries = [
+    { id: "preview-time-1", day: "mon", period: "1", title: "データサイエンス基礎", room: "第4校舎 J411", teacher: "佐藤先生", memo: "" },
+    { id: "preview-time-2", day: "mon", period: "3", title: "Academic Writing", room: "独立館 D307", teacher: "Smith先生", memo: "PC持参" },
+    { id: "preview-time-3", day: "tue", period: "2", title: "現代社会論", room: "第6校舎 611", teacher: "鈴木先生", memo: "" },
+    { id: "preview-time-4", day: "wed", period: "3", title: "情報システム設計", room: "第4校舎 B棟", teacher: "高橋先生", memo: "グループ演習" },
+    { id: "preview-time-5", day: "thu", period: "2", title: "データサイエンス基礎", room: "第4校舎 J411", teacher: "佐藤先生", memo: "" },
+    { id: "preview-time-6", day: "fri", period: "4", title: "研究会", room: "南校舎 453", teacher: "田中先生", memo: "発表担当" }
+  ];
+  customCampusLinks = [
+    { id: "preview-link-1", name: "ゼミ共有フォルダ", url: "https://drive.google.com/", isOwner: false },
+    { id: "preview-link-2", name: "履修メモ", url: "https://www.students.keio.ac.jp/", isOwner: false }
+  ];
+  textbookPostList = [
+    {
+      id: "preview-book-1",
+      type: "sell",
+      title: "統計学入門",
+      course: "データサイエンス基礎",
+      teacher: "佐藤先生",
+      price: "1,200円",
+      condition: "書き込み少",
+      campus: "日吉",
+      contact: "学内チャット",
+      note: "日吉駅またはキャンパス内で受け渡しできます。",
+      ownerName: "プレビュー学生A",
+      isOwner: false
+    },
+    {
+      id: "preview-book-2",
+      type: "buy",
+      title: "Academic Writing Skills 3",
+      course: "Academic Writing",
+      teacher: "Smith先生",
+      price: "応相談",
+      condition: "状態不問",
+      campus: "日吉",
+      contact: "学内チャット",
+      note: "",
+      ownerName: "プレビュー学生B",
+      isOwner: false
+    }
+  ];
+
+  authView.hidden = true;
+  appView.hidden = false;
+  courseFilter.value = "all";
+  statusFilter.value = "unsubmitted";
+  fillAccountSettings();
+  updateCacheSummary(dashboardData.meta, "サンプルデータを表示しています");
+  renderDashboard();
+  renderTimetable();
+  renderCampusHub();
+  renderTextbooks();
+  setPreviewControls(true);
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 async function refreshSession() {
@@ -304,6 +515,11 @@ async function handleSignup(event) {
 }
 
 async function handleLogout() {
+  if (isPreviewMode) {
+    showAuth();
+    showToast("プレビューを終了しました。");
+    return;
+  }
   await api("/api/auth/logout", { method: "POST" });
   showAuth();
   showToast("ログアウトしました。");
@@ -386,7 +602,8 @@ function updateCacheSummary(meta, warning) {
   const sourceLabels = {
     network: "Canvasから取得",
     database: "1時間キャッシュを表示",
-    stale: "前回のキャッシュを表示"
+    stale: "前回のキャッシュを表示",
+    preview: "サンプルデータ"
   };
   const sourceCountNote = meta.sourceCounts
     ? `課題API ${meta.sourceCounts.courseAssignments}件 / To Do ${meta.sourceCounts.todo}件 / 表示対象 ${meta.sourceCounts.merged}件`
@@ -511,6 +728,18 @@ async function updateAssignmentVisibility(button) {
   button.disabled = true;
   try {
     const hidden = button.dataset.hidden === "true";
+    if (isPreviewMode) {
+      const assignment = dashboardData.assignments.find(
+        (item) => item.id === button.dataset.assignmentId && item.courseId === button.dataset.courseId
+      );
+      if (assignment) assignment.hiddenByUser = hidden;
+      dashboardData.stats = buildAssignmentStats(dashboardData.assignments);
+      dashboardData.meta.hiddenAssignments = dashboardData.assignments
+        .filter((item) => item.hiddenByUser).length;
+      renderDashboard();
+      showToast(hidden ? "サンプル課題を非表示にしました。" : "サンプル課題を再表示しました。");
+      return;
+    }
     await api("/api/assignment-visibility", {
       method: "PUT",
       body: {
@@ -563,7 +792,7 @@ function renderTimetable() {
             <strong>${escapeHtml(entry.title)}</strong>
             <span>${escapeHtml([entry.room, entry.teacher].filter(Boolean).join("・"))}</span>
             ${entry.memo ? `<p>${escapeHtml(entry.memo)}</p>` : ""}
-            <button type="button" class="text-button danger-text" data-timetable-id="${escapeHtml(entry.id)}">削除</button>
+            ${isPreviewMode ? "" : `<button type="button" class="text-button danger-text" data-timetable-id="${escapeHtml(entry.id)}">削除</button>`}
           </div>`).join("")
         : '<span class="timetable-empty">-</span>';
       return `<div class="timetable-cell">${cell}</div>`;
@@ -772,6 +1001,7 @@ async function migratePrivateLocalData() {
 
 loginForm.addEventListener("submit", handleLogin);
 signupForm.addEventListener("submit", handleSignup);
+previewButton.addEventListener("click", showPreview);
 logoutButton.addEventListener("click", handleLogout);
 profileForm.addEventListener("submit", saveProfile);
 canvasSettingsForm.addEventListener("submit", saveCanvasSettings);

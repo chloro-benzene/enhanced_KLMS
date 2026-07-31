@@ -585,6 +585,39 @@ textarea {
   margin-bottom: 24px;
 }
 
+.preview-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 20px;
+  border-top: 1px solid #d1d5db;
+  padding: 20px 0 0;
+}
+
+.preview-entry strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.preview-entry p {
+  margin-bottom: 0;
+}
+
+.preview-notice {
+  border-color: #93c5fd;
+  color: #1e3a8a;
+  background: #eff6ff;
+}
+
+.preview-notice strong {
+  margin-right: 8px;
+}
+
+.preview-mode form :disabled {
+  cursor: not-allowed;
+}
+
 .auth-grid,
 .settings-grid {
   display: grid;
@@ -679,6 +712,11 @@ textarea {
 
   .auth-view {
     margin-top: 20px;
+  }
+
+  .preview-entry {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .section-heading-row {
