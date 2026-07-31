@@ -22,7 +22,10 @@ const courseCount = $("#course-count");
 const courseFilter = $("#course-filter");
 const statusFilter = $("#status-filter");
 const campusLinks = $("#campus-links");
+const academicLinks = $("#academic-links");
 const transportLinks = $("#transport-links");
+const transportCampus = $("#transport-campus");
+const transportStation = $("#transport-station");
 const campusLinkForm = $("#campus-link-form");
 const textbookForm = $("#textbook-form");
 const textbookPosts = $("#textbook-posts");
@@ -43,12 +46,64 @@ const defaultCampusLinks = [
   { name: "メディアセンター", url: "https://www.lib.keio.ac.jp/" }
 ];
 
-const defaultTransportLinks = [
-  { name: "JR東日本 運行情報", url: "https://traininfo.jreast.co.jp/train_info/kanto.aspx" },
-  { name: "東急線 運行情報", url: "https://www.tokyu.co.jp/unten2/unten.html" },
-  { name: "東京メトロ 運行情報", url: "https://www.tokyometro.jp/unkou/" },
-  { name: "Yahoo! 路線情報", url: "https://transit.yahoo.co.jp/diainfo/area/4" }
+const academicResources = [
+  { name: "シラバス・時間割（塾生用）", url: "https://gslbs.keio.jp/syllabus/login" },
+  { name: "シラバス・時間割（公開用）", url: "https://gslbs.keio.jp/pub-syllabus/search" },
+  { name: "履修案内（三田）", url: "https://www.students.keio.ac.jp/mt/class/registration/index.html" },
+  { name: "履修案内（日吉）", url: "https://www.students.keio.ac.jp/hy/class/registration/" },
+  { name: "履修案内（矢上）", url: "https://www.students.keio.ac.jp/yg/class/registration/" },
+  { name: "履修案内（湘南藤沢）", url: "https://www.students.keio.ac.jp/sfc/class/registration/" },
+  { name: "履修案内（芝共立）", url: "https://www.students.keio.ac.jp/sk/class/registration/" },
+  { name: "試験時間割（三田）", url: "https://www.students.keio.ac.jp/mt/class/exam/" },
+  { name: "試験時間割（日吉）", url: "https://www.students.keio.ac.jp/hy/class/exam/" },
+  { name: "試験時間割（矢上）", url: "https://www.students.keio.ac.jp/yg/class/exam/" }
 ];
+
+const campusTransportResources = {
+  mita: {
+    station: "田町駅・三田駅",
+    links: [
+      { name: "JR東日本 運行情報", url: "https://traininfo.jreast.co.jp/train_info/kanto.aspx" },
+      { name: "都営地下鉄 運行情報", url: "https://www.kotsu.metro.tokyo.jp/subway/schedule/" }
+    ]
+  },
+  hiyoshi: {
+    station: "日吉駅",
+    links: [
+      { name: "東急線 運行情報", url: "https://www.tokyu.co.jp/unten2/unten.html" },
+      { name: "横浜市営交通", url: "https://www.city.yokohama.lg.jp/kotsu/" }
+    ]
+  },
+  yagami: {
+    station: "日吉駅",
+    links: [
+      { name: "東急線 運行情報", url: "https://www.tokyu.co.jp/unten2/unten.html" },
+      { name: "横浜市営交通", url: "https://www.city.yokohama.lg.jp/kotsu/" }
+    ]
+  },
+  shinanomachi: {
+    station: "信濃町駅",
+    links: [
+      { name: "JR東日本 運行情報", url: "https://traininfo.jreast.co.jp/train_info/kanto.aspx" }
+    ]
+  },
+  sfc: {
+    station: "湘南台駅",
+    links: [
+      { name: "小田急線 運行情報", url: "https://www.odakyu.jp/cgi-bin/user/emg/emergency_bbs.pl" },
+      { name: "相鉄線 運行情報", url: "https://www.sotetsu.co.jp/" },
+      { name: "横浜市営交通", url: "https://www.city.yokohama.lg.jp/kotsu/" },
+      { name: "神奈中バス運行情報", url: "https://real.kanachu.jp/" }
+    ]
+  },
+  shibakyoritsu: {
+    station: "浜松町駅・大門駅",
+    links: [
+      { name: "JR東日本 運行情報", url: "https://traininfo.jreast.co.jp/train_info/kanto.aspx" },
+      { name: "都営地下鉄 運行情報", url: "https://www.kotsu.metro.tokyo.jp/subway/schedule/" }
+    ]
+  }
+};
 
 const timetableDays = [
   { key: "mon", label: "月" },
@@ -342,6 +397,7 @@ function updateCacheSummary(meta, warning) {
     `有効期限: ${formatDateTime(meta.expiresAt)}`,
     sourceCountNote,
     meta.fetchErrors?.length ? `一部取得失敗: ${meta.fetchErrors.length}件` : "",
+    meta.assignmentPreferencesAvailable === false ? "課題非表示機能はDB更新待ち" : "",
     warning
   ].filter(Boolean).join(" / ");
 }
@@ -350,18 +406,22 @@ function getFilteredAssignments() {
   if (!dashboardData) return [];
   return dashboardData.assignments.filter((assignment) => {
     const courseMatches = courseFilter.value === "all" || assignment.courseId === courseFilter.value;
+    if (!courseMatches) return false;
+    if (statusFilter.value === "hidden") return assignment.hiddenByUser;
+    if (assignment.hiddenByUser) return false;
     const statusMatches =
       statusFilter.value === "all" ||
       (statusFilter.value === "unsubmitted" && !assignment.submitted) ||
       assignment.status === statusFilter.value;
-    return courseMatches && statusMatches;
+    return statusMatches;
   });
 }
 
 function renderAssignments() {
   const items = getFilteredAssignments();
-  const total = dashboardData?.assignments.length ?? 0;
-  assignmentCount.textContent = `${items.length}件表示 / 全${total}件`;
+  const total = dashboardData?.assignments.filter((assignment) => !assignment.hiddenByUser).length ?? 0;
+  const hidden = dashboardData?.meta.hiddenAssignments ?? 0;
+  assignmentCount.textContent = `${items.length}件表示 / 表示対象${total}件 / 非表示${hidden}件`;
   if (items.length === 0) {
     assignments.innerHTML = '<p class="empty">条件に合う課題はありません。</p>';
     return;
@@ -372,9 +432,13 @@ function renderAssignments() {
     const link = itemUrl
       ? `<a href="${escapeHtml(itemUrl)}" target="_blank" rel="noreferrer">${title}</a>`
       : title;
+    const preferenceAction = dashboardData.meta.assignmentPreferencesAvailable
+      ? `<button type="button" class="text-button assignment-visibility-button" data-assignment-id="${escapeHtml(item.id)}" data-course-id="${escapeHtml(item.courseId)}" data-hidden="${item.hiddenByUser ? "false" : "true"}">${item.hiddenByUser ? "再表示する" : "表示しない"}</button>`
+      : "";
     return `<div class="item">
       <div class="item-title">${link}<span class="badge status-${escapeHtml(item.status)}">${escapeHtml(item.statusLabel)}</span></div>
       <div class="meta">${escapeHtml(item.courseName ?? "コース不明")}・${formatDate(item.dueAt)}</div>
+      ${preferenceAction}
     </div>`;
   }).join("");
 }
@@ -388,7 +452,7 @@ function renderCourses() {
   }
   const counts = new Map();
   for (const assignment of dashboardData.assignments) {
-    if (!assignment.submitted) {
+    if (!assignment.submitted && !assignment.hiddenByUser) {
       counts.set(assignment.courseId, (counts.get(assignment.courseId) ?? 0) + 1);
     }
   }
@@ -440,6 +504,26 @@ async function loadDashboard({ refresh = false } = {}) {
   } finally {
     reloadButton.disabled = false;
     refreshButton.disabled = false;
+  }
+}
+
+async function updateAssignmentVisibility(button) {
+  button.disabled = true;
+  try {
+    const hidden = button.dataset.hidden === "true";
+    await api("/api/assignment-visibility", {
+      method: "PUT",
+      body: {
+        courseId: button.dataset.courseId,
+        assignmentId: button.dataset.assignmentId,
+        hidden
+      }
+    });
+    await loadDashboard();
+    showToast(hidden ? "課題を非表示にしました。" : "課題を再表示しました。");
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message, "error");
   }
 }
 
@@ -542,8 +626,15 @@ function renderLinkList(container, links) {
 }
 
 function renderCampusHub() {
+  renderLinkList(academicLinks, academicResources);
   renderLinkList(campusLinks, [...defaultCampusLinks, ...customCampusLinks]);
-  renderLinkList(transportLinks, defaultTransportLinks);
+  renderTransportHub();
+}
+
+function renderTransportHub() {
+  const selected = campusTransportResources[transportCampus?.value] ?? campusTransportResources.mita;
+  transportStation.textContent = `最寄り: ${selected.station}`;
+  renderLinkList(transportLinks, selected.links);
 }
 
 async function loadCampusLinks() {
@@ -689,12 +780,17 @@ reloadButton.addEventListener("click", () => loadDashboard());
 refreshButton.addEventListener("click", () => loadDashboard({ refresh: true }));
 courseFilter.addEventListener("change", renderAssignments);
 statusFilter.addEventListener("change", renderAssignments);
+assignments.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-assignment-id][data-course-id]");
+  if (button) updateAssignmentVisibility(button);
+});
 timetableForm.addEventListener("submit", addTimetableEntry);
 weeklyTimetable.addEventListener("click", (event) => {
   const button = event.target.closest("[data-timetable-id]");
   if (button) deleteTimetableEntry(button.dataset.timetableId);
 });
 campusLinkForm.addEventListener("submit", addCampusLink);
+transportCampus.addEventListener("change", renderTransportHub);
 campusLinks.addEventListener("click", (event) => {
   const button = event.target.closest("[data-campus-id]");
   if (button) deleteCampusLink(button.dataset.campusId);

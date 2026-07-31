@@ -638,6 +638,22 @@ textarea {
   margin: 0;
 }
 
+.section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.section-heading-row h3 {
+  margin-bottom: 3px;
+}
+
+.assignment-visibility-button {
+  margin-top: 9px;
+}
+
 .toast {
   position: fixed;
   right: 20px;
@@ -663,6 +679,11 @@ textarea {
 
   .auth-view {
     margin-top: 20px;
+  }
+
+  .section-heading-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

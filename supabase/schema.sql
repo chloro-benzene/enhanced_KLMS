@@ -240,3 +240,22 @@ grant all on public.report_templates to service_role;
 grant all on public.campus_links to service_role;
 grant all on public.textbook_posts to service_role;
 
+create table if not exists public.assignment_preferences (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  course_id text not null,
+  assignment_id text not null,
+  hidden boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, course_id, assignment_id)
+);
+
+drop trigger if exists assignment_preferences_set_updated_at on public.assignment_preferences;
+create trigger assignment_preferences_set_updated_at
+before update on public.assignment_preferences
+for each row execute function public.set_updated_at();
+
+alter table public.assignment_preferences enable row level security;
+revoke all on public.assignment_preferences from anon, authenticated;
+grant all on public.assignment_preferences to service_role;
+
