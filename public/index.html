@@ -120,6 +120,7 @@
                   <option value="unsubmitted">未提出のみ</option><option value="all">すべて</option>
                   <option value="overdue">期限切れ</option><option value="due-soon">7日以内</option>
                   <option value="submitted">提出済み</option>
+                  <option value="hidden">非表示にした課題</option>
                 </select>
               </div>
             </div>
@@ -135,8 +136,22 @@
           <article class="panel">
             <div class="panel-header stacked-header"><div><h2>学内情報ハブ</h2><span class="count">共通リンクと自分用リンク</span></div></div>
             <div class="hub-body">
+              <section><h3>履修・シラバス・試験</h3><div id="academic-links" class="quick-links"></div></section>
               <section><h3>学内リンク</h3><div id="campus-links" class="quick-links"></div></section>
-              <section><h3>交通情報</h3><div id="transport-links" class="quick-links"></div></section>
+              <section>
+                <div class="section-heading-row">
+                  <div><h3>キャンパス別の運行情報</h3><span id="transport-station" class="count"></span></div>
+                  <select id="transport-campus" aria-label="キャンパスを選択">
+                    <option value="mita">三田</option>
+                    <option value="hiyoshi">日吉</option>
+                    <option value="yagami">矢上</option>
+                    <option value="shinanomachi">信濃町</option>
+                    <option value="sfc">湘南藤沢</option>
+                    <option value="shibakyoritsu">芝共立</option>
+                  </select>
+                </div>
+                <div id="transport-links" class="quick-links"></div>
+              </section>
               <form id="campus-link-form" class="inline-form">
                 <input id="campus-link-name" type="text" placeholder="リンク名" required>
                 <input id="campus-link-url" type="url" placeholder="https://..." required>

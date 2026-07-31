@@ -125,6 +125,58 @@ function withCacheSource(payload, cacheSource, warning) {
   };
 }
 
+function isMissingAssignmentPreferences(error) {
+  return error instanceof SupabaseError &&
+    (error.status === 404 || /assignment_preferences/i.test(error.message));
+}
+
+function buildVisibleAssignmentStats(assignments) {
+  return assignments.reduce(
+    (stats, assignment) => {
+      if (assignment.hiddenByUser) return stats;
+      stats.total += 1;
+      if (assignment.submitted) stats.submitted += 1;
+      if (!assignment.submitted) stats.unsubmitted += 1;
+      if (assignment.status === "overdue") stats.overdue += 1;
+      if (assignment.status === "due-soon") stats.dueSoon += 1;
+      if (assignment.status === "no-due") stats.noDue += 1;
+      return stats;
+    },
+    { total: 0, submitted: 0, unsubmitted: 0, overdue: 0, dueSoon: 0, noDue: 0 }
+  );
+}
+
+async function applyAssignmentPreferences(userId, data) {
+  let rows = [];
+  let available = true;
+  try {
+    rows = await dbSelect(
+      "assignment_preferences",
+      `user_id=eq.${userId}&hidden=eq.true&select=course_id,assignment_id`
+    );
+  } catch (error) {
+    if (!isMissingAssignmentPreferences(error)) throw error;
+    available = false;
+  }
+
+  const hiddenKeys = new Set(rows.map((row) => `${row.course_id}:${row.assignment_id}`));
+  const assignments = data.assignments.map((assignment) => ({
+    ...assignment,
+    hiddenByUser: hiddenKeys.has(`${assignment.courseId}:${assignment.id}`)
+  }));
+
+  return {
+    ...data,
+    assignments,
+    stats: buildVisibleAssignmentStats(assignments),
+    meta: {
+      ...data.meta,
+      assignmentPreferencesAvailable: available,
+      hiddenAssignments: assignments.filter((assignment) => assignment.hiddenByUser).length
+    }
+  };
+}
+
 async function loadUserDashboard(userId, forceRefresh) {
   const cached = await getCachedDashboard(userId);
   if (!forceRefresh && cached && Date.now() < new Date(cached.expires_at).getTime()) {
@@ -362,7 +414,44 @@ async function handleApi(request, response, url) {
 
   if (url.pathname === "/api/dashboard" && method === "GET") {
     const data = await loadUserDashboard(userId, url.searchParams.get("refresh") === "1");
-    sendJson(response, 200, data);
+    sendJson(response, 200, await applyAssignmentPreferences(userId, data));
+    return true;
+  }
+
+  if (url.pathname === "/api/assignment-visibility" && method === "PUT") {
+    const body = await readJsonBody(request);
+    const courseId = cleanText(body.courseId, { max: 100, required: true });
+    const assignmentId = cleanText(body.assignmentId, { max: 300, required: true });
+    if (typeof body.hidden !== "boolean") {
+      throw new HttpError(400, "課題の表示設定が正しくありません。");
+    }
+
+    try {
+      if (body.hidden) {
+        await dbInsert("assignment_preferences", {
+          user_id: userId,
+          course_id: courseId,
+          assignment_id: assignmentId,
+          hidden: true
+        }, { upsert: true });
+      } else {
+        await dbDelete(
+          "assignment_preferences",
+          `user_id=eq.${userId}&course_id=eq.${encodeURIComponent(courseId)}&assignment_id=eq.${encodeURIComponent(assignmentId)}`
+        );
+      }
+    } catch (error) {
+      if (isMissingAssignmentPreferences(error)) {
+        throw new HttpError(
+          503,
+          "課題の非表示機能を有効にするには、Supabaseの追加SQLを実行してください。",
+          "ASSIGNMENT_PREFERENCES_NOT_READY"
+        );
+      }
+      throw error;
+    }
+
+    sendJson(response, 200, { courseId, assignmentId, hidden: body.hidden });
     return true;
   }
 
